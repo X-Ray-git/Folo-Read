@@ -8,9 +8,9 @@
 
 - **📥 云端同步**：通过 Folo API 自动拉取 Feeds / Inbox / Social 三类未读内容，下载文章 HTML 与图片到本地
 - **🔍 智能去重**：基于 Jaccard n-gram 相似度检测重复文章，交互式选择保留版本
-- **🤖 AI 过滤**：调用大模型（SiliconFlow）批量并行分析文章相关性，自动建议过滤非目标领域内容
+- **🤖 AI 过滤**：调用大模型批量并行分析文章相关性，自动建议过滤非目标领域内容
 - **👀 人工复审**：交互式 TUI 审批界面，可逐条复核 AI 判定，挽回误拦文章
-- **☁️ 双向同步**：确认后自动删除本地垃圾文件，同时向 Folo 云端推送已读状态
+- **☁️ 双向同步**：确认后自动删除本地文件，同时向 Folo 云端推送已读状态
 
 ## 🚀 快速开始
 
@@ -39,8 +39,8 @@ cp .env.export.example .env.export
 
 | 变量 | 说明 | 获取方式 |
 |------|------|---------|
-| `FOLO_SESSION_TOKEN` | Folo 认证 Token | 登录 [Folo Web](https://app.follow.is)，从浏览器 Cookie 中提取 `__Secure-better-auth.session_token` 的值 |
-| `AI_API_KEY` | SiliconFlow API Key | 注册 [SiliconFlow](https://siliconflow.cn) 获取 |
+| `FOLO_SESSION_TOKEN` | Folo 认证 Token | 登录 [Folo Web](https://app.follow.is) 从浏览器 Cookie 中提取 `__Secure-better-auth.session_token` 的值 |
+| `AI_API_KEY` | LLM API Key | 从对应的模型供应商处获取 |
 
 ### 运行
 
