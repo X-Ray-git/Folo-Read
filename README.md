@@ -174,13 +174,12 @@ Folo-Read/
 - [ ] 翻译阶段（自动翻译外文文章）
 - [ ] 摘要阶段（生成文章摘要）
 
-## 🙏 致谢 (Acknowledgments)
+## 🙏 致谢
 
-本项目高度依赖并受启发于优秀的新一代信息聚合平台 **[Follow (Folo)](https://follow.is)** 及其背后的开源生态。
+本项目依赖 **[Follow (Folo)](https://follow.is)** 及其开源工程
 
-特别感谢：
-- [Follow App](https://github.com/RSSNext/Follow) 及其庞大的 Monorepo 提供的优秀实践。
-- Follow 官方提供的 `@follow-app/client-sdk` 支持了本项目的地下 API 调用与数据提取。
-- 感谢那些为打造更卓越 RSS 阅读体验而贡献力量的开源开发者们。
+- [Follow App](https://github.com/RSSNext/Follow)
+- Follow 官方提供的 `@follow-app/client-sdk` 支持了本项目的地下 API 调用与数据提取
+- 感谢那些为打造更卓越 RSS 阅读体验而贡献力量的开源开发者们
 
 
