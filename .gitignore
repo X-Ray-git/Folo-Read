@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment & Secrets
+.env.export
+
+# Runtime data (personal articles, state, cache)
+unread-articles/
+
+# Reference source copy (not part of this project)
+Folo/
+
+# Internal handover log (keep locally, not for public repo)
+LOG.md
+
+# Build output
+dist/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo

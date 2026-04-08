@@ -1,0 +1,35 @@
+{
+  "name": "folo-read",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx scripts/pipeline.ts",
+    "pipeline": "tsx scripts/pipeline.ts",
+    "export:unread": "tsx scripts/export-unread-articles-api.ts",
+    "analyze": "tsx scripts/ai-analyze.ts",
+    "dedup": "tsx scripts/ai-dedup.ts",
+    "review": "tsx scripts/ai-review.ts"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.0",
+    "@follow-app/client-sdk": "^0.3.95",
+    "@mozilla/readability": "^0.5.0",
+    "cli-progress": "^3.12.0",
+    "es-toolkit": "^1.31.0",
+    "glob": "^11.0.0",
+    "jsdom": "^26.0.0",
+    "p-limit": "^6.2.0",
+    "pathe": "^2.0.2",
+    "picocolors": "^1.1.1",
+    "rimraf": "^6.1.3",
+    "tsx": "^4.19.2",
+    "yaml": "^2.8.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/cli-progress": "^3.11.6",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^22.13.1",
+    "typescript": "^5.7.3"
+  }
+}
