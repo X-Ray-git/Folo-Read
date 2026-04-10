@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'models.dart';
 
@@ -38,8 +39,10 @@ class FollowClient {
     // 2. Fetch Feed articles (view=0 for general, view=1 for social)
     for (int viewType in [0, 1]) {
       try {
+        final uri = Uri.parse('$apiUrl/entries');
+        debugPrint('POST $uri (view=$viewType)');
         final response = await http.post(
-          Uri.parse('$apiUrl/entries'),
+          uri,
           headers: _headers,
           body: jsonEncode({
             'read': false,
@@ -50,6 +53,7 @@ class FollowClient {
         );
 
         if (response.statusCode == 200) {
+          debugPrint('Success fetching entries (view=$viewType)');
           final data = jsonDecode(response.body);
           if (data['data'] != null && data['data'] is List) {
             for (var item in data['data']) {
@@ -62,10 +66,11 @@ class FollowClient {
             }
           }
         } else {
-          print('Error fetching entries (view=$viewType): ${response.statusCode}');
+          debugPrint('Error fetching entries (view=$viewType): ${response.statusCode}');
+          debugPrint('Response body: ${response.body}');
         }
       } catch (e) {
-        print('Exception fetching entries: $e');
+        debugPrint('Exception fetching entries: $e');
       }
     }
 
@@ -76,12 +81,15 @@ class FollowClient {
     final Map<String, int> feedViewMap = {};
 
     try {
+      final uri = Uri.parse('$apiUrl/subscriptions');
+      debugPrint('GET $uri');
       final response = await http.get(
-        Uri.parse('$apiUrl/subscriptions'),
+        uri,
         headers: _headers,
       );
 
       if (response.statusCode == 200) {
+        debugPrint('Success fetching subscriptions');
         final data = jsonDecode(response.body);
         if (data['data'] != null && data['data'] is List) {
           for (var sub in data['data']) {
@@ -90,9 +98,12 @@ class FollowClient {
             }
           }
         }
+      } else {
+        debugPrint('Error fetching subscriptions: ${response.statusCode}');
+        debugPrint('Response body: ${response.body}');
       }
     } catch (e) {
-      print('Exception fetching subscriptions: $e');
+      debugPrint('Exception fetching subscriptions: $e');
     }
 
     return {
@@ -104,8 +115,10 @@ class FollowClient {
     if (!hasToken) throw Exception('Session token not set');
 
     try {
+      final uri = Uri.parse('$apiUrl/reads');
+      debugPrint('POST $uri (entryId=$entryId, isInbox=$isInbox)');
       final response = await http.post(
-        Uri.parse('$apiUrl/reads'),
+        uri,
         headers: _headers,
         body: jsonEncode({
           'entryIds': [entryId],
@@ -113,9 +126,16 @@ class FollowClient {
         }),
       );
 
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        debugPrint('Successfully marked entry as read');
+        return true;
+      } else {
+        debugPrint('Error marking as read: ${response.statusCode}');
+        debugPrint('Response body: ${response.body}');
+        return false;
+      }
     } catch (e) {
-      print('Error marking as read: $e');
+      debugPrint('Exception marking as read: $e');
       return false;
     }
   }

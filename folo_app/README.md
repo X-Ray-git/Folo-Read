@@ -1,17 +1,19 @@
 # folo_app
 
-A new Flutter project.
+A standalone RSS reader frontend for the Follow.is API built in Flutter.
 
-## Getting Started
+## Overview
 
-This project is a starting point for a Flutter application.
+This project is a starting point for a mobile Flutter application that provides a localized RSS reading experience by interacting with the Follow.is backend API.
 
-A few resources to get you started if this is your first Flutter project:
+## Requirements & Roadmap (For Future Agents / Developers)
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+To ensure this project develops smoothly according to the user's expectations, please adhere to the following requirements:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+1.  **Platform Focus:** Currently, the primary focus is entirely on the **Android** version. Ensure the Android app works perfectly before concerning yourself with iOS or other platforms.
+2.  **Architecture:** Do **not** build or require a separate backend server. All functionality must be executed within the app itself (e.g., direct API calls, local data processing).
+3.  **Frontend First:** Initially, focus completely on building and refining the frontend user interface (a standard, functional RSS reader).
+4.  **AI Integration (Deferred):** Only after the frontend is fully functional and well-tested should you consider integrating AI features. When you do, these must also run locally or hit AI APIs directly from the client without a middleman server.
+5.  **Reference Source:** If needed during migration or to clarify API behaviors, you are encouraged to clone and reference the original Follow (`folo`) GitHub repository. It is the root source of truth.
+6.  **Debugging & Logging:** Maintain thorough debug logs (e.g., `debugPrint` for API calls, HTTP status codes, missing headers) to help the user trace issues dynamically and provide feedback to you.
+7.  **Version Control:** Ensure all meaningful feature implementations or bug fixes are handled on branches properly and tested.
