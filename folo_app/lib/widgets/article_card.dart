@@ -22,6 +22,7 @@ class ArticleCard extends StatefulWidget {
 
 class _ArticleCardState extends State<ArticleCard> {
   TranslatedArticle? _translation;
+  bool _isTranslating = false;
 
   @override
   void initState() {
@@ -30,17 +31,26 @@ class _ArticleCardState extends State<ArticleCard> {
   }
 
   Future<void> _loadTranslation() async {
+    setState(() {
+      _isTranslating = true;
+    });
+
     final translation = await TranslationService().getTranslation(
       widget.article.id,
       widget.article.title ?? '',
       widget.article.content ?? widget.article.description ?? '',
     );
-    if (mounted && translation != null) {
+
+    if (mounted) {
       setState(() {
-        _translation = translation;
+        _isTranslating = false;
+        if (translation != null) {
+          _translation = translation;
+        }
       });
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final titleToDisplay = _translation?.title.isNotEmpty == true
@@ -86,6 +96,17 @@ class _ArticleCardState extends State<ArticleCard> {
                       ),
                     ),
                   ),
+                  if (_isTranslating)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8.0),
+                      child: SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    ),
                   Spacer(),
                   Text(
                     _formatDate(widget.article.publishedAt),
