@@ -6,6 +6,9 @@ import '../widgets/article_card.dart';
 import 'login_screen.dart';
 import 'settings_screen.dart';
 import '../api/translation_service.dart';
+import '../api/ai_pipeline_service.dart';
+import 'similarity_screen.dart';
+import 'filter_box_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -124,13 +127,21 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _applyFilter() {
+  void _applyFilter() async {
+    await AiPipelineService().init();
     setState(() {
+      List<FollowArticle> filtered;
       if (_selectedCategory == 'All') {
-        _filteredArticles = List.from(_articles);
+        filtered = List.from(_articles);
       } else {
-        _filteredArticles = _articles.where((a) => a.category.toLowerCase() == _selectedCategory.toLowerCase()).toList();
+        filtered = _articles.where((a) => a.category.toLowerCase() == _selectedCategory.toLowerCase()).toList();
       }
+
+      // Hide rejected ones from the main feed
+      _filteredArticles = filtered.where((a) {
+        final state = AiPipelineService().getState(a.id);
+        return state.status != 'rejected';
+      }).toList();
     });
   }
 
@@ -164,22 +175,156 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openAiFilterBox() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FilterBoxScreen(
+          client: _client,
+          articles: _articles, // pass all fetched articles so it can find the rejected ones
+        ),
+      ),
+    ).then((_) {
+      // Reload on return to remove restored/deleted articles from home screen list
+      _fetchArticles();
+    });
+  }
+
+  Future<void> _triggerAiPipeline() async {
+    if (_articles.isEmpty) return;
+
+    // 1. Show processing
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text("Processing Pipeline..."),
+          ],
+        ),
+      )
+    );
+
+    await AiPipelineService().init();
+
+    if (!mounted) return;
+    Navigator.pop(context); // close dialog
+
+    // 2. Similarity Screen
+    // Pass to similarity screen. Similarity screen handles background jaccard and UI.
+    // It returns the kept articles.
+    List<FollowArticle>? similarityKept;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SimilarityScreen(
+          articles: _articles,
+          client: _client,
+          onResolved: (kept) {
+             similarityKept = kept;
+          },
+        ),
+      ),
+    );
+
+    if (similarityKept == null || !mounted) return; // cancelled or aborted
+
+    // 3. AI Analysis on the kept ones
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text("AI Analyzing..."),
+          ],
+        ),
+      )
+    );
+
+    int count = 0;
+    for (var article in similarityKept!) {
+      final state = AiPipelineService().getState(article.id);
+      if (state.status == 'pending') {
+         await AiPipelineService().analyzeArticle(
+           article.id,
+           article.title ?? '',
+           article.content ?? article.description ?? ''
+         );
+         count++;
+      }
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context); // close dialog
+
+    // refresh list and show filter box
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Analyzed $count new articles.')),
+    );
+    _openAiFilterBox();
+  }
+
+  Future<void> _handleRefresh() async {
+    try {
+      final newArticles = await _client.fetchArticles(isRead: _showReadArticles);
+
+      if (!mounted) return;
+
+      setState(() {
+        // Merge and deduplicate
+        final Map<String, FollowArticle> articleMap = {};
+        for (var a in _articles) {
+          articleMap[a.id] = a;
+        }
+
+        int addedCount = 0;
+        for (var a in newArticles) {
+          if (!articleMap.containsKey(a.id)) {
+            articleMap[a.id] = a;
+            addedCount++;
+          }
+        }
+
+        _articles = articleMap.values.toList();
+
+        // Sort by publishedAt descending (newest first)
+        _articles.sort((a, b) {
+          final timeA = DateTime.tryParse(a.publishedAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final timeB = DateTime.tryParse(b.publishedAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return timeB.compareTo(timeA);
+        });
+
+        _applyFilter();
+
+        if (addedCount > 0) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$addedCount new articles available, list updated.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to refresh: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Folo Read'),
         actions: [
-          IconButton(
-            icon: Icon(_showReadArticles ? Icons.visibility : Icons.visibility_off),
-            tooltip: _showReadArticles ? 'Viewing Read' : 'Viewing Unread',
-            onPressed: () {
-              setState(() {
-                _showReadArticles = !_showReadArticles;
-              });
-              _fetchArticles();
-            },
-          ),
           DropdownButton<String>(
             value: _selectedCategory,
             dropdownColor: Theme.of(context).primaryColorLight,
@@ -200,20 +345,70 @@ class _HomeScreenState extends State<HomeScreen> {
             }).toList(),
           ),
           IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: _isLoading ? null : _fetchArticles,
-          ),
-          IconButton(
-            icon: Icon(Icons.settings),
-            onPressed: _openSettings,
-          ),
-          IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: _logout,
+            icon: Icon(Icons.auto_awesome),
+            tooltip: 'AI Analysis',
+            onPressed: _triggerAiPipeline,
           ),
         ],
       ),
-      body: _buildBody(),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor,
+              ),
+              child: Text(
+                'Folo Read',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: Icon(_showReadArticles ? Icons.visibility : Icons.visibility_off),
+              title: Text(_showReadArticles ? 'Viewing Read' : 'Viewing Unread'),
+              onTap: () {
+                Navigator.pop(context);
+                setState(() {
+                  _showReadArticles = !_showReadArticles;
+                });
+                _fetchArticles();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.inbox),
+              title: Text('AI Filter Box'),
+              onTap: () {
+                Navigator.pop(context);
+                _openAiFilterBox();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.settings),
+              title: Text('Settings'),
+              onTap: () {
+                Navigator.pop(context);
+                _openSettings();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.logout),
+              title: Text('Logout'),
+              onTap: () {
+                Navigator.pop(context);
+                _logout();
+              },
+            ),
+          ],
+        ),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _handleRefresh,
+        child: _buildBody(),
+      ),
     );
   }
 
