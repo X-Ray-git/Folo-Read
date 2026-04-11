@@ -77,7 +77,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     bool undoClicked = false;
 
-    // 2. Show SnackBar with Undo
+    // 2. Clear any existing snackbars to prevent stacking, then show new one
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Marked as read'),
@@ -93,9 +94,16 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         duration: Duration(seconds: 3),
       ),
-    ).closed.then((reason) async {
-      // 3. If NOT undone, send the background request
+    );
+
+    // 3. Wait for 3 seconds, then check if undo was clicked
+    Future.delayed(Duration(seconds: 3), () async {
+      if (!mounted) return;
+
       if (!undoClicked) {
+        // Hide the snackbar forcefully to prevent it from getting stuck and allowing late undos
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
         final success = await _client.markAsRead(
           article.id,
           isInbox: article.category == 'inbox'
