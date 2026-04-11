@@ -124,22 +124,38 @@ Content: $content
 ''';
 
     try {
-      final response = await http.post(
+      var requestBody = {
+        'model': modelName,
+        'messages': [
+          {'role': 'system', 'content': systemPrompt},
+          {'role': 'user', 'content': userPrompt}
+        ],
+        'response_format': {'type': 'json_object'},
+        'temperature': 0.1,
+      };
+
+      var response = await http.post(
         Uri.parse(apiUrl),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $apiKey',
         },
-        body: jsonEncode({
-          'model': modelName,
-          'messages': [
-            {'role': 'system', 'content': systemPrompt},
-            {'role': 'user', 'content': userPrompt}
-          ],
-          'response_format': {'type': 'json_object'},
-          'temperature': 0.1,
-        }),
+        body: jsonEncode(requestBody),
       );
+
+      // Fallback if the API rejects response_format (e.g., 400 Bad Request)
+      if (response.statusCode >= 400 && response.statusCode < 500) {
+        debugPrint('LLM API Error with response_format, retrying without it...');
+        requestBody.remove('response_format');
+        response = await http.post(
+          Uri.parse(apiUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $apiKey',
+          },
+          body: jsonEncode(requestBody),
+        );
+      }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -148,14 +164,24 @@ Content: $content
           try {
              // Clean potential markdown blocks just in case
             String cleanJson = responseContent.toString().trim();
-            if (cleanJson.startsWith('```json')) {
-              cleanJson = cleanJson.replaceFirst('```json', '');
-            }
-            if (cleanJson.startsWith('```')) {
-              cleanJson = cleanJson.replaceFirst('```', '');
-            }
-            if (cleanJson.endsWith('```')) {
-              cleanJson = cleanJson.substring(0, cleanJson.length - 3);
+
+            // Try to extract JSON between the first { and the last }
+            final startIndex = cleanJson.indexOf('{');
+            final endIndex = cleanJson.lastIndexOf('}');
+
+            if (startIndex != -1 && endIndex != -1 && endIndex >= startIndex) {
+              cleanJson = cleanJson.substring(startIndex, endIndex + 1);
+            } else {
+              // Fallback to previous markdown cleaning just in case
+              if (cleanJson.startsWith('```json')) {
+                cleanJson = cleanJson.replaceFirst('```json', '');
+              }
+              if (cleanJson.startsWith('```')) {
+                cleanJson = cleanJson.replaceFirst('```', '');
+              }
+              if (cleanJson.endsWith('```')) {
+                cleanJson = cleanJson.substring(0, cleanJson.length - 3);
+              }
             }
 
             final jsonResult = jsonDecode(cleanJson.trim());
