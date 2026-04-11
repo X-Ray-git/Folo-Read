@@ -51,7 +51,6 @@ class ArticleScreen extends StatefulWidget {
 }
 
 class _ArticleScreenState extends State<ArticleScreen> {
-  bool _isMarkingRead = false;
   bool _showTranslation = true;
   TranslatedArticle? _translation;
 
@@ -74,25 +73,9 @@ class _ArticleScreenState extends State<ArticleScreen> {
     }
   }
 
-  Future<void> _markAsRead() async {
-    setState(() => _isMarkingRead = true);
-
-    final success = await widget.client.markAsRead(
-      widget.article.id,
-      isInbox: widget.article.category == 'inbox'
-    );
-
-    if (success && mounted) {
-      widget.onMarkedRead();
-      Navigator.of(context).pop();
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to mark as read')),
-        );
-        setState(() => _isMarkingRead = false);
-      }
-    }
+  void _markAsRead() {
+    widget.onMarkedRead();
+    Navigator.of(context).pop();
   }
 
   @override
@@ -120,14 +103,12 @@ class _ArticleScreenState extends State<ArticleScreen> {
               ),
             ],
           ),
-          IconButton(
-            icon: _isMarkingRead
-                ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : Icon(Icons.done),
-            onPressed: _isMarkingRead ? null : _markAsRead,
-            tooltip: 'Mark as Read',
-          )
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _markAsRead,
+        tooltip: 'Mark as Read',
+        child: Icon(Icons.done),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),

@@ -27,7 +27,7 @@ class FollowClient {
     };
   }
 
-  Future<List<FollowArticle>> fetchUnreadArticles({int limit = 20}) async {
+  Future<List<FollowArticle>> fetchArticles({int limit = 20, bool isRead = false}) async {
     if (!hasToken) throw Exception('Session token not set');
 
     List<FollowArticle> allArticles = [];
@@ -40,12 +40,12 @@ class FollowClient {
     for (int viewType in [0, 1]) {
       try {
         final uri = Uri.parse('$apiUrl/entries');
-        debugPrint('POST $uri (view=$viewType)');
+        debugPrint('POST $uri (view=$viewType, read=$isRead)');
         final response = await http.post(
           uri,
           headers: _headers,
           body: jsonEncode({
-            'read': false,
+            'read': isRead,
             'limit': limit,
             'view': viewType,
             'withContent': true,

@@ -19,6 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String? _error;
   String _selectedCategory = 'All';
+  bool _showReadArticles = false;
 
   @override
   void initState() {
@@ -53,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final articles = await _client.fetchUnreadArticles();
+      final articles = await _client.fetchArticles(isRead: _showReadArticles);
       setState(() {
         _articles = articles;
         _applyFilter();
@@ -65,6 +66,54 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _markArticleAsRead(FollowArticle article, int index) {
+    // 1. Instantly remove from UI
+    setState(() {
+      _articles.removeWhere((a) => a.id == article.id);
+      _filteredArticles.removeWhere((a) => a.id == article.id);
+    });
+
+    bool undoClicked = false;
+
+    // 2. Show SnackBar with Undo
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Marked as read'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            undoClicked = true;
+            setState(() {
+              _articles.insert(index < _articles.length ? index : _articles.length, article);
+              _applyFilter();
+            });
+          },
+        ),
+        duration: Duration(seconds: 3),
+      ),
+    ).closed.then((reason) async {
+      // 3. If NOT undone, send the background request
+      if (!undoClicked) {
+        final success = await _client.markAsRead(
+          article.id,
+          isInbox: article.category == 'inbox'
+        );
+
+        // 4. If request failed, restore it and notify
+        if (!success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to mark as read: ${article.title}')),
+          );
+          setState(() {
+            // Restore it back
+            _articles.insert(index < _articles.length ? index : _articles.length, article);
+            _applyFilter();
+          });
+        }
+      }
+    });
   }
 
   void _applyFilter() {
@@ -113,6 +162,16 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text('Folo Read'),
         actions: [
+          IconButton(
+            icon: Icon(_showReadArticles ? Icons.visibility : Icons.visibility_off),
+            tooltip: _showReadArticles ? 'Viewing Read' : 'Viewing Unread',
+            onPressed: () {
+              setState(() {
+                _showReadArticles = !_showReadArticles;
+              });
+              _fetchArticles();
+            },
+          ),
           DropdownButton<String>(
             value: _selectedCategory,
             dropdownColor: Theme.of(context).primaryColorLight,
@@ -171,7 +230,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (_filteredArticles.isEmpty) {
-      return Center(child: Text('No unread articles for $_selectedCategory!'));
+      final statusText = _showReadArticles ? 'read' : 'unread';
+      return Center(child: Text('No $statusText articles for $_selectedCategory!'));
     }
 
     return ListView.builder(
@@ -181,16 +241,12 @@ class _HomeScreenState extends State<HomeScreen> {
           // prefetch occasionally as they scroll
           _prefetchTranslations(index);
         }
+        final article = _filteredArticles[index];
         return ArticleCard(
-          key: ValueKey(_filteredArticles[index].id),
-          article: _filteredArticles[index],
+          key: ValueKey(article.id),
+          article: article,
           client: _client,
-          onMarkedRead: () {
-            setState(() {
-              _articles.removeWhere((a) => a.id == _filteredArticles[index].id);
-              _filteredArticles.removeAt(index);
-            });
-          },
+          onMarkedRead: () => _markArticleAsRead(article, index),
         );
       },
     );
