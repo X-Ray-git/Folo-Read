@@ -4,6 +4,8 @@ import '../api/follow_client.dart';
 import '../api/models.dart';
 import '../widgets/article_card.dart';
 import 'login_screen.dart';
+import 'settings_screen.dart';
+import '../api/translation_service.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -13,8 +15,10 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final FollowClient _client = FollowClient();
   List<FollowArticle> _articles = [];
+  List<FollowArticle> _filteredArticles = [];
   bool _isLoading = true;
   String? _error;
+  String _selectedCategory = 'All';
 
   @override
   void initState() {
@@ -52,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final articles = await _client.fetchUnreadArticles();
       setState(() {
         _articles = articles;
+        _applyFilter();
         _isLoading = false;
       });
     } catch (e) {
@@ -59,6 +64,31 @@ class _HomeScreenState extends State<HomeScreen> {
         _error = 'Failed to load articles: $e';
         _isLoading = false;
       });
+    }
+  }
+
+  void _applyFilter() {
+    setState(() {
+      if (_selectedCategory == 'All') {
+        _filteredArticles = List.from(_articles);
+      } else {
+        _filteredArticles = _articles.where((a) => a.category.toLowerCase() == _selectedCategory.toLowerCase()).toList();
+      }
+    });
+  }
+
+  void _prefetchTranslations(int currentIndex) async {
+    final prefs = await SharedPreferences.getInstance();
+    final prefetchCount = prefs.getInt('llm_prefetch_count') ?? 10;
+    final maxIndex = currentIndex + prefetchCount;
+
+    for (int i = currentIndex; i < maxIndex && i < _filteredArticles.length; i++) {
+      final article = _filteredArticles[i];
+      TranslationService().getTranslation(
+        article.id,
+        article.title ?? '',
+        article.content ?? article.description ?? '',
+      ); // Ignoring the future intentionally, letting it run and cache in background
     }
   }
 
@@ -71,15 +101,44 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => SettingsScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Folo Read'),
         actions: [
+          DropdownButton<String>(
+            value: _selectedCategory,
+            dropdownColor: Theme.of(context).primaryColorLight,
+            underline: SizedBox(),
+            icon: Icon(Icons.filter_list, color: Colors.black87),
+            onChanged: (String? newValue) {
+              if (newValue != null) {
+                _selectedCategory = newValue;
+                _applyFilter();
+              }
+            },
+            items: <String>['All', 'Feeds', 'Social', 'Inbox']
+                .map<DropdownMenuItem<String>>((String value) {
+              return DropdownMenuItem<String>(
+                value: value,
+                child: Text(value),
+              );
+            }).toList(),
+          ),
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: _isLoading ? null : _fetchArticles,
+          ),
+          IconButton(
+            icon: Icon(Icons.settings),
+            onPressed: _openSettings,
           ),
           IconButton(
             icon: Icon(Icons.logout),
@@ -111,19 +170,25 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    if (_articles.isEmpty) {
-      return Center(child: Text('No unread articles!'));
+    if (_filteredArticles.isEmpty) {
+      return Center(child: Text('No unread articles for $_selectedCategory!'));
     }
 
     return ListView.builder(
-      itemCount: _articles.length,
+      itemCount: _filteredArticles.length,
       itemBuilder: (context, index) {
+        if (index % 5 == 0) {
+          // prefetch occasionally as they scroll
+          _prefetchTranslations(index);
+        }
         return ArticleCard(
-          article: _articles[index],
+          key: ValueKey(_filteredArticles[index].id),
+          article: _filteredArticles[index],
           client: _client,
           onMarkedRead: () {
             setState(() {
-              _articles.removeAt(index);
+              _articles.removeWhere((a) => a.id == _filteredArticles[index].id);
+              _filteredArticles.removeAt(index);
             });
           },
         );

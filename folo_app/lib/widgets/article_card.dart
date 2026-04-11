@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import '../api/models.dart';
 import '../api/follow_client.dart';
 import '../screens/article_screen.dart';
+import '../api/translation_service.dart';
 
-class ArticleCard extends StatelessWidget {
+class ArticleCard extends StatefulWidget {
   final FollowArticle article;
   final FollowClient client;
   final VoidCallback onMarkedRead;
@@ -16,7 +17,36 @@ class ArticleCard extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  _ArticleCardState createState() => _ArticleCardState();
+}
+
+class _ArticleCardState extends State<ArticleCard> {
+  TranslatedArticle? _translation;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTranslation();
+  }
+
+  Future<void> _loadTranslation() async {
+    final translation = await TranslationService().getTranslation(
+      widget.article.id,
+      widget.article.title ?? '',
+      widget.article.content ?? widget.article.description ?? '',
+    );
+    if (mounted && translation != null) {
+      setState(() {
+        _translation = translation;
+      });
+    }
+  }
+  @override
   Widget build(BuildContext context) {
+    final titleToDisplay = _translation?.title.isNotEmpty == true
+        ? _translation!.title
+        : widget.article.title ?? 'Untitled';
+
     return Card(
       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       elevation: 2,
@@ -26,9 +56,9 @@ class ArticleCard extends StatelessWidget {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => ArticleScreen(
-                article: article,
-                client: client,
-                onMarkedRead: onMarkedRead,
+                article: widget.article,
+                client: widget.client,
+                onMarkedRead: widget.onMarkedRead,
               ),
             ),
           );
@@ -44,28 +74,28 @@ class ArticleCard extends StatelessWidget {
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getCategoryColor(article.category).withOpacity(0.1),
+                      color: _getCategoryColor(widget.article.category).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      article.category.toUpperCase(),
+                      widget.article.category.toUpperCase(),
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: _getCategoryColor(article.category),
+                        color: _getCategoryColor(widget.article.category),
                       ),
                     ),
                   ),
                   Spacer(),
                   Text(
-                    _formatDate(article.publishedAt),
+                    _formatDate(widget.article.publishedAt),
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
               ),
               SizedBox(height: 12),
               Text(
-                article.title ?? 'Untitled',
+                titleToDisplay,
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -73,10 +103,10 @@ class ArticleCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              if (article.description != null && article.description!.isNotEmpty) ...[
+              if (widget.article.description != null && widget.article.description!.isNotEmpty) ...[
                 SizedBox(height: 8),
                 Text(
-                  _stripHtml(article.description!),
+                  _stripHtml(widget.article.description!),
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey[700],
@@ -85,10 +115,10 @@ class ArticleCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-              if (article.author != null) ...[
+              if (widget.article.author != null) ...[
                 SizedBox(height: 12),
                 Text(
-                  article.author!,
+                  widget.article.author!,
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
               ]

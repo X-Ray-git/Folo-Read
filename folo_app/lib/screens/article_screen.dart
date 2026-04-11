@@ -4,6 +4,35 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../api/models.dart';
 import '../api/follow_client.dart';
+import '../api/translation_service.dart';
+
+class FullScreenImageScreen extends StatelessWidget {
+  final String imageUrl;
+
+  const FullScreenImageScreen({Key? key, required this.imageUrl}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: IconThemeData(color: Colors.white),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          minScale: 0.1,
+          maxScale: 5.0,
+          child: CachedNetworkImage(
+            imageUrl: imageUrl,
+            placeholder: (context, url) => CircularProgressIndicator(),
+            errorWidget: (context, url, error) => Icon(Icons.error, color: Colors.white),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class ArticleScreen extends StatefulWidget {
   final FollowArticle article;
@@ -23,6 +52,27 @@ class ArticleScreen extends StatefulWidget {
 
 class _ArticleScreenState extends State<ArticleScreen> {
   bool _isMarkingRead = false;
+  bool _showTranslation = true;
+  TranslatedArticle? _translation;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTranslation();
+  }
+
+  Future<void> _loadTranslation() async {
+    final translation = await TranslationService().getTranslation(
+      widget.article.id,
+      widget.article.title ?? '',
+      widget.article.content ?? widget.article.description ?? '',
+    );
+    if (mounted && translation != null) {
+      setState(() {
+        _translation = translation;
+      });
+    }
+  }
 
   Future<void> _markAsRead() async {
     setState(() => _isMarkingRead = true);
@@ -47,10 +97,29 @@ class _ArticleScreenState extends State<ArticleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final titleToDisplay = _showTranslation && _translation != null
+        ? _translation!.title
+        : widget.article.title ?? 'Untitled';
+
+    final contentToDisplay = _showTranslation && _translation != null
+        ? _translation!.content
+        : widget.article.content ?? widget.article.description ?? 'No content available.';
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.article.title ?? 'Article'),
+        title: Text('Article'),
         actions: [
+          Row(
+            children: [
+              Text('中/En', style: TextStyle(fontSize: 12)),
+              Switch(
+                value: _showTranslation,
+                onChanged: _translation != null ? (val) {
+                  setState(() => _showTranslation = val);
+                } : null,
+              ),
+            ],
+          ),
           IconButton(
             icon: _isMarkingRead
                 ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
@@ -66,7 +135,7 @@ class _ArticleScreenState extends State<ArticleScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              widget.article.title ?? 'Untitled',
+              titleToDisplay,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 8),
@@ -91,7 +160,7 @@ class _ArticleScreenState extends State<ArticleScreen> {
             ],
             Divider(height: 32),
             Html(
-              data: widget.article.content ?? widget.article.description ?? 'No content available.',
+              data: contentToDisplay,
               onLinkTap: (url, attributes, element) {
                 if (url != null) {
                   launchUrl(Uri.parse(url));
@@ -102,13 +171,23 @@ class _ArticleScreenState extends State<ArticleScreen> {
                   builder: (extensionContext) {
                     final src = extensionContext.attributes['src'];
                     if (src != null && src.isNotEmpty) {
-                      return CachedNetworkImage(
-                        imageUrl: src,
-                        placeholder: (context, url) => const Center(
-                          child: CircularProgressIndicator(),
-                        ),
-                        errorWidget: (context, url, error) => const Center(
-                          child: Icon(Icons.broken_image, color: Colors.grey),
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FullScreenImageScreen(imageUrl: src),
+                            ),
+                          );
+                        },
+                        child: CachedNetworkImage(
+                          imageUrl: src,
+                          placeholder: (context, url) => const Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                          errorWidget: (context, url, error) => const Center(
+                            child: Icon(Icons.broken_image, color: Colors.grey),
+                          ),
                         ),
                       );
                     }
