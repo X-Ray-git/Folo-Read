@@ -39,6 +39,8 @@ dependencies:
   flutter_html: ^3.0.0
   shared_preferences: ^2.5.5
   url_launcher: ^6.3.2
+  flutter_displaymode: ^0.7.0
+  cached_network_image: ^3.4.1
 
 dev_dependencies:
   flutter_test:

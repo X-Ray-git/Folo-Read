@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../api/models.dart';
 import '../api/follow_client.dart';
 
@@ -96,6 +97,25 @@ class _ArticleScreenState extends State<ArticleScreen> {
                   launchUrl(Uri.parse(url));
                 }
               },
+              extensions: [
+                ImageExtension(
+                  builder: (extensionContext) {
+                    final src = extensionContext.attributes['src'];
+                    if (src != null && src.isNotEmpty) {
+                      return CachedNetworkImage(
+                        imageUrl: src,
+                        placeholder: (context, url) => const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                        errorWidget: (context, url, error) => const Center(
+                          child: Icon(Icons.broken_image, color: Colors.grey),
+                        ),
+                      );
+                    }
+                    return const SizedBox();
+                  },
+                ),
+              ],
               style: {
                 "body": Style(
                   fontSize: FontSize(16.0),
