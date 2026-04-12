@@ -7,7 +7,7 @@ import 'login_screen.dart';
 import 'settings_screen.dart';
 import '../api/translation_service.dart';
 import '../api/ai_pipeline_service.dart';
-import 'similarity_screen.dart';
+import '../managers/ai_task_manager.dart';
 import 'filter_box_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -28,6 +28,24 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _initClientAndFetch();
+    AiTaskManager().addListener(_onAiTaskUpdate);
+    AiTaskManager().onOpenFilterBox = _openFilterBoxGlobally;
+  }
+
+  @override
+  void dispose() {
+    AiTaskManager().removeListener(_onAiTaskUpdate);
+    if (AiTaskManager().onOpenFilterBox == _openFilterBoxGlobally) {
+      AiTaskManager().onOpenFilterBox = null;
+    }
+    super.dispose();
+  }
+
+  void _onAiTaskUpdate() {
+    // When the AI task completes, we should refresh the list to hide newly rejected articles
+    if (!AiTaskManager().isRunning && AiTaskManager().analyzedCount > 0) {
+       _applyFilter();
+    }
   }
 
   Future<void> _initClientAndFetch() async {
@@ -189,82 +207,12 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _triggerAiPipeline() async {
-    if (_articles.isEmpty) return;
+  void _triggerAiPipeline() {
+    _openAiFilterBox();
+  }
 
-    // 1. Show processing
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (c) => AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text("Processing Pipeline..."),
-          ],
-        ),
-      )
-    );
-
-    await AiPipelineService().init();
-
-    if (!mounted) return;
-    Navigator.pop(context); // close dialog
-
-    // 2. Similarity Screen
-    // Pass to similarity screen. Similarity screen handles background jaccard and UI.
-    // It returns the kept articles.
-    List<FollowArticle>? similarityKept;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SimilarityScreen(
-          articles: _articles,
-          client: _client,
-          onResolved: (kept) {
-             similarityKept = kept;
-          },
-        ),
-      ),
-    );
-
-    if (similarityKept == null || !mounted) return; // cancelled or aborted
-
-    // 3. AI Analysis on the kept ones
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (c) => AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text("AI Analyzing..."),
-          ],
-        ),
-      )
-    );
-
-    int count = 0;
-    for (var article in similarityKept!) {
-      final state = AiPipelineService().getState(article.id);
-      if (state.status == 'pending') {
-         await AiPipelineService().analyzeArticle(
-           article.id,
-           article.title ?? '',
-           article.content ?? article.description ?? ''
-         );
-         count++;
-      }
-    }
-
-    if (!mounted) return;
-    Navigator.pop(context); // close dialog
-
-    // refresh list and show filter box
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Analyzed $count new articles.')),
-    );
+  // A global method to fetch current variables for snackbar route
+  void _openFilterBoxGlobally() {
     _openAiFilterBox();
   }
 

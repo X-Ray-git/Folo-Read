@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import '../api/models.dart';
 import '../api/follow_client.dart';
-import '../api/similarity_service.dart';
-
-class SimilarityGroup {
-  final List<FollowArticle> articles;
-  SimilarityGroup(this.articles);
-}
+import '../managers/ai_task_manager.dart';
 
 class SimilarityScreen extends StatefulWidget {
   final List<FollowArticle> articles;
@@ -25,71 +20,30 @@ class SimilarityScreen extends StatefulWidget {
 }
 
 class _SimilarityScreenState extends State<SimilarityScreen> {
-  bool _isProcessing = true;
+  bool _isProcessing = false;
   List<SimilarityGroup> _groups = [];
   final Map<String, bool> _keepSelections = {}; // articleId -> true if selected to keep
 
   @override
   void initState() {
     super.initState();
-    _processSimilarities();
-  }
+    _groups = AiTaskManager().pendingResolutionGroups;
 
-  Future<void> _processSimilarities() async {
-    // Process in background
-    await Future.delayed(Duration(milliseconds: 100));
-
-    List<FollowArticle> unassigned = List.from(widget.articles);
-    List<SimilarityGroup> newGroups = [];
-
-    while (unassigned.isNotEmpty) {
-      final current = unassigned.removeAt(0);
-      final group = [current];
-
-      final currentText = '${current.title} ${current.content ?? current.description ?? ''}';
-
-      for (int i = unassigned.length - 1; i >= 0; i--) {
-        final other = unassigned[i];
-        final otherText = '${other.title} ${other.content ?? other.description ?? ''}';
-
-        final similarity = SimilarityService.calculateJaccard(currentText, otherText);
-        if (similarity >= 0.80) {
-          group.add(unassigned.removeAt(i));
-        }
+    for (var group in _groups) {
+      for (var a in group.articles) {
+        _keepSelections[a.id] = false;
       }
-
-      // Only add groups with 2 or more items
-      if (group.length > 1) {
-        newGroups.add(SimilarityGroup(group));
-        for (var a in group) {
-          _keepSelections[a.id] = false; // By default, keep none or keep all? Let's default to keep oldest or nothing.
-        }
-
+      if (group.articles.isNotEmpty) {
         // Auto-select the oldest one by default
-        if (group.isNotEmpty) {
-          group.sort((a, b) {
-            final timeA = DateTime.tryParse(a.publishedAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
-            final timeB = DateTime.tryParse(b.publishedAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
-            return timeA.compareTo(timeB); // oldest first
-          });
-          _keepSelections[group.first.id] = true;
-        }
+        final articles = List<FollowArticle>.from(group.articles);
+        articles.sort((a, b) {
+          final timeA = DateTime.tryParse(a.publishedAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final timeB = DateTime.tryParse(b.publishedAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return timeA.compareTo(timeB); // oldest first
+        });
+        _keepSelections[articles.first.id] = true;
       }
     }
-
-    if (!mounted) return;
-
-    if (newGroups.isEmpty) {
-      // No similarities found, instantly resolve keeping everything
-      widget.onResolved(widget.articles);
-      Navigator.of(context).pop();
-      return;
-    }
-
-    setState(() {
-      _groups = newGroups;
-      _isProcessing = false;
-    });
   }
 
   Future<void> _confirmResolution() async {
@@ -100,22 +54,14 @@ class _SimilarityScreenState extends State<SimilarityScreen> {
     List<FollowArticle> finalKept = [];
     List<String> toMarkAsReadIds = [];
 
-    // Articles not in any group are automatically kept
-    Set<String> groupedIds = {};
+    // We only process the groups provided. Unique articles are already handled by AiTaskManager.
     for (var g in _groups) {
       for (var a in g.articles) {
-        groupedIds.add(a.id);
         if (_keepSelections[a.id] == true) {
           finalKept.add(a);
         } else {
           toMarkAsReadIds.add(a.id);
         }
-      }
-    }
-
-    for (var a in widget.articles) {
-      if (!groupedIds.contains(a.id)) {
-        finalKept.add(a);
       }
     }
 
@@ -136,16 +82,31 @@ class _SimilarityScreenState extends State<SimilarityScreen> {
   Widget build(BuildContext context) {
     if (_isProcessing) {
       return Scaffold(
-        appBar: AppBar(title: Text('Detecting Similarities...')),
+        appBar: AppBar(title: Text('Processing...')),
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Resolve Similar Articles'),
-      ),
-      body: ListView.builder(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          AiTaskManager().markResolutionAborted();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('处理重复文章'),
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () {
+              // If they cancel, we abort the resolution process
+              AiTaskManager().markResolutionAborted();
+              Navigator.pop(context);
+            },
+          ),
+        ),
+        body: ListView.builder(
         itemCount: _groups.length,
         itemBuilder: (context, groupIndex) {
           final group = _groups[groupIndex];
@@ -175,12 +136,13 @@ class _SimilarityScreenState extends State<SimilarityScreen> {
               ),
             ),
           );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _confirmResolution,
-        icon: Icon(Icons.check),
-        label: Text('Confirm & Continue'),
+          },
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _confirmResolution,
+          icon: Icon(Icons.check),
+          label: Text('Confirm & Continue'),
+        ),
       ),
     );
   }
