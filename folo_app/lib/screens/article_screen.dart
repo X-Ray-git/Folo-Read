@@ -53,11 +53,18 @@ class ArticleScreen extends StatefulWidget {
 class _ArticleScreenState extends State<ArticleScreen> {
   bool _showTranslation = true;
   TranslatedArticle? _translation;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadTranslation();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadTranslation() async {
@@ -110,9 +117,14 @@ class _ArticleScreenState extends State<ArticleScreen> {
         tooltip: 'Mark as Read',
         child: Icon(Icons.done),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
+      body: Scrollbar(
+        controller: _scrollController,
+        thickness: 4.0,
+        radius: const Radius.circular(8.0),
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -187,7 +199,9 @@ class _ArticleScreenState extends State<ArticleScreen> {
                 ),
               },
             ),
+            SizedBox(height: 32),
           ],
+        ),
         ),
       ),
     );
