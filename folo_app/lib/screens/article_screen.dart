@@ -17,16 +17,19 @@ class FullScreenImageScreen extends StatelessWidget {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
-        iconTheme: IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Center(
+      body: SizedBox.expand(
         child: InteractiveViewer(
           minScale: 0.1,
           maxScale: 5.0,
-          child: CachedNetworkImage(
-            imageUrl: imageUrl,
-            placeholder: (context, url) => CircularProgressIndicator(),
-            errorWidget: (context, url, error) => Icon(Icons.error, color: Colors.white),
+          clipBehavior: Clip.none,
+          child: Center(
+            child: CachedNetworkImage(
+              imageUrl: imageUrl,
+              placeholder: (context, url) => const CircularProgressIndicator(),
+              errorWidget: (context, url, error) => const Icon(Icons.error, color: Colors.white),
+            ),
           ),
         ),
       ),
