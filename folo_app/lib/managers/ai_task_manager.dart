@@ -76,7 +76,7 @@ class AiTaskManager extends ChangeNotifier {
         final otherText = '${other.title} ${other.content ?? other.description ?? ''}';
 
         final similarity = SimilarityService.calculateJaccard(currentText, otherText);
-        if (similarity >= 0.80) {
+        if (similarity >= 0.85) {
           group.add(unassigned.removeAt(i));
         }
       }

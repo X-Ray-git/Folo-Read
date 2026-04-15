@@ -147,7 +147,7 @@ export interface SimilarityConfig {
 
 const DEFAULT_CONFIG: SimilarityConfig = {
   strategy: 'jaccard',
-  threshold: 0.7,
+  threshold: 0.85,
   options: { ngramSize: 2 },
 };
 
