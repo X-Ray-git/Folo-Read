@@ -24,21 +24,35 @@ class _HomeScreenState extends State<HomeScreen> {
   String _selectedCategory = 'All';
   bool _showReadArticles = false;
 
+  String? _nextCursor;
+  bool _isFetchingMore = false;
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     _initClientAndFetch();
     AiTaskManager().addListener(_onAiTaskUpdate);
     AiTaskManager().onOpenFilterBox = _openFilterBoxGlobally;
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     AiTaskManager().removeListener(_onAiTaskUpdate);
     if (AiTaskManager().onOpenFilterBox == _openFilterBoxGlobally) {
       AiTaskManager().onOpenFilterBox = null;
     }
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (!_isLoading && !_isFetchingMore && _nextCursor != null) {
+        _fetchMoreArticles();
+      }
+    }
   }
 
   void _onAiTaskUpdate() {
@@ -72,12 +86,26 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _nextCursor = null;
     });
 
     try {
       final articles = await _client.fetchArticles(isRead: _showReadArticles);
+
+      articles.sort((a, b) {
+        final timeA = DateTime.tryParse(a.publishedAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timeB = DateTime.tryParse(b.publishedAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return timeB.compareTo(timeA);
+      });
+
+      String? newCursor;
+      if (articles.isNotEmpty) {
+        newCursor = articles.last.publishedAt;
+      }
+
       setState(() {
         _articles = articles;
+        _nextCursor = newCursor;
         _applyFilter();
         _isLoading = false;
       });
@@ -86,6 +114,51 @@ class _HomeScreenState extends State<HomeScreen> {
         _error = 'Failed to load articles: $e';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _fetchMoreArticles() async {
+    if (_nextCursor == null || _isFetchingMore) return;
+
+    setState(() {
+      _isFetchingMore = true;
+    });
+
+    try {
+      final newArticles = await _client.fetchArticles(isRead: _showReadArticles, cursor: _nextCursor);
+
+      if (!mounted) return;
+
+      setState(() {
+        if (newArticles.isNotEmpty) {
+          final Map<String, FollowArticle> articleMap = {
+            for (var a in _articles) a.id: a
+          };
+          for (var a in newArticles) {
+            articleMap[a.id] = a;
+          }
+          _articles = articleMap.values.toList();
+          _articles.sort((a, b) {
+            final timeA = DateTime.tryParse(a.publishedAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final timeB = DateTime.tryParse(b.publishedAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return timeB.compareTo(timeA);
+          });
+
+          _nextCursor = _articles.last.publishedAt;
+          _applyFilter();
+        } else {
+          _nextCursor = null; // Reached the end
+        }
+        _isFetchingMore = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isFetchingMore = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load more articles: $e')),
+      );
     }
   }
 
@@ -246,6 +319,10 @@ class _HomeScreenState extends State<HomeScreen> {
           return timeB.compareTo(timeA);
         });
 
+        if (newArticles.isNotEmpty && _articles.length == newArticles.length) {
+            _nextCursor = newArticles.last.publishedAt;
+        }
+
         _applyFilter();
 
         if (addedCount > 0) {
@@ -386,8 +463,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return ListView.builder(
-      itemCount: _filteredArticles.length,
+      controller: _scrollController,
+      itemCount: _filteredArticles.length + (_isFetchingMore ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index == _filteredArticles.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32.0),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
         if (index % 5 == 0) {
           // prefetch occasionally as they scroll
           _prefetchTranslations(index);

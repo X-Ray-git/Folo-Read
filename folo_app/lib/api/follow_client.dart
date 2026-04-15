@@ -27,7 +27,7 @@ class FollowClient {
     };
   }
 
-  Future<List<FollowArticle>> fetchArticles({int limit = 20, bool isRead = false}) async {
+  Future<List<FollowArticle>> fetchArticles({int limit = 20, bool isRead = false, String? cursor}) async {
     if (!hasToken) throw Exception('Session token not set');
 
     List<FollowArticle> allArticles = [];
@@ -40,16 +40,23 @@ class FollowClient {
     for (int viewType in [0, 1]) {
       try {
         final uri = Uri.parse('$apiUrl/entries');
-        debugPrint('POST $uri (view=$viewType, read=$isRead)');
+        debugPrint('POST $uri (view=$viewType, read=$isRead, cursor=$cursor)');
+
+        final Map<String, dynamic> body = {
+          'read': isRead,
+          'limit': limit,
+          'view': viewType,
+          'withContent': true,
+        };
+
+        if (cursor != null) {
+          body['publishedAfter'] = cursor;
+        }
+
         final response = await http.post(
           uri,
           headers: _headers,
-          body: jsonEncode({
-            'read': isRead,
-            'limit': limit,
-            'view': viewType,
-            'withContent': true,
-          }),
+          body: jsonEncode(body),
         );
 
         if (response.statusCode == 200) {
@@ -76,56 +83,85 @@ class FollowClient {
 
     // 3. Fetch Inbox articles
     final inboxIds = await _fetchInboxIds();
+    final List<String> unreadEntryIds = [];
+
     for (String inboxId in inboxIds) {
       try {
         final uri = Uri.parse('$apiUrl/entries/inbox');
-        debugPrint('POST $uri (inboxId=$inboxId, read=$isRead)');
+        debugPrint('POST $uri (inboxId=$inboxId, read=$isRead, cursor=$cursor)');
 
-        bool hasMore = true;
+        final Map<String, dynamic> body = {
+          'inboxId': inboxId,
+          'read': isRead,
+          'limit': limit,
+        };
 
-        while (hasMore) {
-          final Map<String, dynamic> body = {
-            'inboxId': inboxId,
-            'read': isRead,
-            'limit': limit,
-            'withContent': true,
-          };
-          // cursor is initialized to null and only assigned if pagination was supported
-          // for now we don't have pagination assignment so the warning is expected, we can keep it simple:
-          // we are intentionally fetching only one page.
+        if (cursor != null) {
+          body['publishedAfter'] = cursor;
+        }
 
-          final response = await http.post(
-            uri,
-            headers: _headers,
-            body: jsonEncode(body),
-          );
+        final response = await http.post(
+          uri,
+          headers: _headers,
+          body: jsonEncode(body),
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['data'] != null && data['data'] is List) {
+            for (var item in data['data']) {
+              if (item['entries'] != null && item['entries']['id'] != null) {
+                unreadEntryIds.add(item['entries']['id'].toString());
+              }
+            }
+          }
+        } else {
+          debugPrint('Error fetching inbox entries ($inboxId): ${response.statusCode}');
+        }
+      } catch (e) {
+        debugPrint('Exception fetching inbox entries list: $e');
+      }
+    }
+
+    debugPrint('Found ${unreadEntryIds.length} inbox entries. Fetching details concurrently...');
+
+    // Fetch inbox article details concurrently
+    final chunkedIds = _chunkList(unreadEntryIds, 5); // Fetch in chunks of 5 to avoid overwhelming the API
+    for (var chunk in chunkedIds) {
+      final List<Future<FollowArticle?>> fetchTasks = chunk.map((entryId) async {
+        try {
+          final uri = Uri.parse('$apiUrl/entries/inbox?id=$entryId');
+          final response = await http.get(uri, headers: _headers);
 
           if (response.statusCode == 200) {
             final data = jsonDecode(response.body);
-            if (data['data'] == null || (data['data'] as List).isEmpty) {
-              hasMore = false;
-              break;
+            if (data['data'] != null && data['data']['entries'] != null) {
+              return FollowArticle.fromJson(data['data']['entries'], 'inbox');
             }
-
-            for (var item in data['data']) {
-              if (item['entries'] != null) {
-                final article = FollowArticle.fromJson(item['entries'], 'inbox');
-                allArticles.add(article);
-              }
-            }
-            hasMore = false; // Just one page per inbox per fetch request
-
-          } else {
-            debugPrint('Error fetching inbox entries ($inboxId): ${response.statusCode}');
-            hasMore = false;
           }
+        } catch (e) {
+          debugPrint('Exception fetching full inbox entry $entryId: $e');
         }
-      } catch (e) {
-        debugPrint('Exception fetching inbox entries: $e');
+        return null;
+      }).toList();
+
+      final results = await Future.wait(fetchTasks);
+      for (var article in results) {
+        if (article != null) {
+          allArticles.add(article);
+        }
       }
     }
 
     return allArticles;
+  }
+
+  List<List<T>> _chunkList<T>(List<T> list, int chunkSize) {
+    List<List<T>> chunks = [];
+    for (var i = 0; i < list.length; i += chunkSize) {
+      chunks.add(list.sublist(i, i + chunkSize > list.length ? list.length : i + chunkSize));
+    }
+    return chunks;
   }
 
   Future<List<String>> _fetchInboxIds() async {
