@@ -88,6 +88,7 @@ class FollowClient {
             'inboxId': inboxId,
             'read': isRead,
             'limit': limit,
+            'withContent': true,
           };
           // cursor is initialized to null and only assigned if pagination was supported
           // for now we don't have pagination assignment so the warning is expected, we can keep it simple:
@@ -107,22 +108,10 @@ class FollowClient {
             }
 
             for (var item in data['data']) {
-              final entryId = item['id'];
-
-              // Fetch full content for inbox entry
-              final fullEntryUri = Uri.parse('$apiUrl/entries/inbox?id=$entryId');
-              final fullEntryRes = await http.get(fullEntryUri, headers: _headers);
-
-              if (fullEntryRes.statusCode == 200) {
-                final fullData = jsonDecode(fullEntryRes.body);
-                if (fullData['data'] != null && fullData['data']['entries'] != null) {
-                  final article = FollowArticle.fromJson(fullData['data']['entries'], 'inbox');
-                  allArticles.add(article);
-                }
+              if (item['entries'] != null) {
+                final article = FollowArticle.fromJson(item['entries'], 'inbox');
+                allArticles.add(article);
               }
-
-              // Only pull max 1 page per inbox per refresh for performance, otherwise we can get stuck if limit is large
-              // For full pagination support we would use cursor from the item or pagination data
             }
             hasMore = false; // Just one page per inbox per fetch request
 

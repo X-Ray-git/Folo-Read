@@ -93,17 +93,23 @@ class AiTaskManager extends ChangeNotifier {
   }
 
   Future<void> _processLlmQueue() async {
+    final int maxConcurrency = 64;
+
     while (_llmQueue.isNotEmpty) {
-      final article = _llmQueue.removeAt(0);
+      final chunk = _llmQueue.take(maxConcurrency).toList();
+      _llmQueue.removeRange(0, chunk.length);
 
-      await AiPipelineService().analyzeArticle(
-        article.id,
-        article.title ?? '',
-        article.content ?? article.description ?? ''
-      );
+      final futures = chunk.map((article) async {
+        await AiPipelineService().analyzeArticle(
+          article.id,
+          article.title ?? '',
+          article.content ?? article.description ?? '',
+        );
+        analyzedCount++;
+        notifyListeners();
+      });
 
-      analyzedCount++;
-      notifyListeners();
+      await Future.wait(futures);
     }
 
     _checkCompletion();
