@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'pathe';
 import { glob } from 'glob';
-import { getArticleState, updateArticleState } from './lib/state-manager';
-import { askLLM } from './lib/llm';
-import { getFilterSystemPrompt, buildUserPrompt } from './prompts/filter';
+import { getArticleState, updateArticleState } from './lib/state-manager.js';
+import { askLLM } from './lib/llm.js';
+import { getFilterSystemPrompt, buildUserPrompt } from './prompts/filter.js';
 
 /**
  * AI Analyzer Script

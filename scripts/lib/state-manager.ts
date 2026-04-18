@@ -12,6 +12,7 @@ export interface ArticleState {
   summary?: string;
   url?: string;
   title?: string;
+  duplicate_of?: string;
 }
 
 const STATE_FILE = path.join(process.cwd(), 'unread-articles', 'pipeline-state.json');

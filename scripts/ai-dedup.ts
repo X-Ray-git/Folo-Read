@@ -14,9 +14,10 @@ import fs from 'node:fs/promises';
 import path from 'pathe';
 import { glob } from 'glob';
 import picocolors from 'picocolors';
-import { intro, outro, select, isCancel } from '@clack/prompts';
-import { loadState, updateArticleState } from './lib/state-manager';
-import { createSimilarityStrategy, SimilarityConfig } from './lib/similarity';
+import { intro, outro, multiselect, isCancel } from '@clack/prompts';
+import { loadState, updateArticleState } from './lib/state-manager.js';
+import { createSimilarityStrategy, SimilarityConfig } from './lib/similarity.js';
+import { markAsReadInFolo, markLocallyRead, deleteArticleFolders } from './lib/actions.js';
 
 // ============================================
 // Configuration
@@ -255,9 +256,14 @@ async function main() {
       };
     });
     
-    const selected = await select({
-      message: '请选择要保留的文章（其余将被标记为重复）：',
+    // Auto-select the first article as default, but allow user to select 0, 1, or multiple
+    const initialValues = [group[0].id];
+
+    const selected = await multiselect({
+      message: '请选择要保留的文章 (按空格多选，未选中的将被直接标记为已读并丢弃)：',
       options,
+      initialValues,
+      required: false,
     });
     
     if (isCancel(selected)) {
@@ -265,31 +271,45 @@ async function main() {
       process.exit(0);
     }
     
-    const keepId = selected as string;
-    const keepArticle = articleMap.get(keepId)!;
+    const keepIds = selected as string[];
+    const rejectedIds: string[] = [];
+
+    // Provide a reference title for the duplicate marker if there are any selected
+    const referenceTitle = keepIds.length > 0
+      ? articleMap.get(keepIds[0])!.title.substring(0, 20) + '...'
+      : '同组其他文章';
+    const keepIdForDupe = keepIds.length > 0 ? keepIds[0] : undefined;
     
-    // Mark others as duplicates
     for (const article of group) {
-      if (article.id !== keepId) {
+      if (!keepIds.includes(article.id)) {
         await updateArticleState(article.id, {
-          status: 'analyzed',
+          status: 'rejected', // mark directly as rejected so it skips AI review
           should_reject: true,
           reject_reason: '重复内容',
-          duplicate_of: keepId,
+          duplicate_of: keepIdForDupe,
           title: article.title,
-          summary: `与「${keepArticle.title.substring(0, 20)}...」重复`,
+          summary: `与「${referenceTitle}」重复`,
           url: article.url,
           category: article.category,
         });
+        rejectedIds.push(article.id);
         totalDuplicates++;
-        console.log(picocolors.red(`   ✗ 标记为重复: ${article.title.substring(0, 40)}...`));
+        console.log(picocolors.red(`   ✗ 标记为重复(直接已读): ${article.title.substring(0, 40)}...`));
       } else {
         console.log(picocolors.green(`   ✓ 保留: ${article.title.substring(0, 40)}...`));
       }
     }
+
+    if (rejectedIds.length > 0) {
+      const updatedState = await loadState(); // reload to get the latest state
+      await deleteArticleFolders(rejectedIds);
+      await markLocallyRead(rejectedIds);
+      await markAsReadInFolo(rejectedIds, updatedState);
+      console.log(picocolors.gray(`   清理完毕，并在 Folo 中标记已读。`));
+    }
   }
   
-  outro(picocolors.yellow(`\n⚠️  已标记 ${totalDuplicates} 篇重复文章，它们将在审核阶段显示供最终确认`));
+  outro(picocolors.yellow(`\n⚠️  已标记 ${totalDuplicates} 篇重复文章，并自动清理。保留的文章将继续进入分析环节`));
 }
 
 main().catch(console.error);
