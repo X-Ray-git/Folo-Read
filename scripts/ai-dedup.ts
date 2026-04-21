@@ -38,7 +38,7 @@ loadEnv();
 
 const DEDUP_CONFIG: SimilarityConfig = {
   strategy: (process.env.DEDUP_STRATEGY as 'jaccard' | 'embedding') || 'jaccard',
-  threshold: parseFloat(process.env.DEDUP_THRESHOLD || '0.7'),
+  threshold: parseFloat(process.env.DEDUP_THRESHOLD || '0.85'),
   options: {
     ngramSize: parseInt(process.env.DEDUP_NGRAM_SIZE || '2', 10),
   },
