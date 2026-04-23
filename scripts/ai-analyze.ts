@@ -80,7 +80,7 @@ async function main() {
       const urlMatch = html.match(/<span class="meta-label">原文链接：<\/span>\s*<a href="([^"]+)"/i);
       const originalUrl = urlMatch && urlMatch[1] ? urlMatch[1] : `file://${htmlPath}`;
 
-      const result = await askLLM(getFilterSystemPrompt(), buildUserPrompt(title, snippet));
+      const result = await askLLM(getFilterSystemPrompt(), buildUserPrompt(title, snippet, originalUrl));
       
       if (result) {
         await updateArticleState(item.id, {
