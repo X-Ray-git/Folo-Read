@@ -40,7 +40,7 @@ cp .env.export.example .env.export
 | 变量 | 说明 | 获取方式 |
 |------|------|---------|
 | `FOLO_SESSION_TOKEN` | Folo 认证 Token | 登录 [Folo Web](https://app.follow.is) 从浏览器 Cookie 中提取 `__Secure-better-auth.session_token` 的值 |
-| `AI_API_KEY` | LLM API Key | 从对应的模型供应商处获取 |
+| `AI_API_KEY` / `DEEPSEEK_API_KEY` | LLM API Key | 从对应的模型供应商处获取（DeepSeek 用 DEEPSEEK_API_KEY） |
 
 ### 运行
 
@@ -121,8 +121,12 @@ FOLO_CONCURRENCY=16        # 下载并发数
 
 # AI 模型
 AI_API_URL=...             # LLM API 地址
-AI_API_KEY=...             # LLM API Key
-AI_MODEL=...               # 模型名称
+AI_API_KEY=...             # LLM API Key（也支持 DEEPSEEK_API_KEY）
+AI_MODEL=...               # 模型名称（也支持 DEEPSEEK_MODEL）
+# DeepSeek（OpenAI 兼容）示例：
+# AI_API_URL=https://api.deepseek.com
+# AI_MODEL=deepseek-v4-flash / deepseek-v4-pro
+# 可选：LLM_THINKING=enabled|disabled；LLM_REASONING_EFFORT=high|max
 
 # 去重
 DEDUP_STRATEGY=jaccard     # 策略：jaccard / embedding（预留）
@@ -181,5 +185,4 @@ Folo-Read/
 - [Follow App](https://github.com/RSSNext/Follow)
 - Follow 官方提供的 `@follow-app/client-sdk` 支持了本项目的地下 API 调用与数据提取
 - 感谢那些为打造更卓越 RSS 阅读体验而贡献力量的开源开发者们
-
 
