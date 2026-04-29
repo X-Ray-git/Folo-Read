@@ -13,7 +13,7 @@ import { getFilterSystemPrompt, buildUserPrompt } from './prompts/filter.js';
  */
 async function main() {
   const baseDir = path.join(process.cwd(), 'unread-articles');
-  
+
   // Find all article directories in subfolders
   const dirs = await glob(['feeds/*', 'social/*', 'inbox/*'], { cwd: baseDir, absolute: true });
   
@@ -80,7 +80,8 @@ async function main() {
       const urlMatch = html.match(/<span class="meta-label">原文链接：<\/span>\s*<a href="([^"]+)"/i);
       const originalUrl = urlMatch && urlMatch[1] ? urlMatch[1] : `file://${htmlPath}`;
 
-      const result = await askLLM(getFilterSystemPrompt(), buildUserPrompt(title, snippet, originalUrl));
+      const articleState = await getArticleState(item.id);
+      const result = await askLLM(getFilterSystemPrompt(), buildUserPrompt(title, snippet, originalUrl, articleState.subscription_category));
       
       if (result) {
         await updateArticleState(item.id, {

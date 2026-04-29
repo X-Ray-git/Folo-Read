@@ -30,6 +30,7 @@ import pLimit from "p-limit"
 import cliProgress from "cli-progress"
 import { Readability } from "@mozilla/readability"
 import { JSDOM } from "jsdom"
+import { updateArticleState } from "./lib/state-manager.js"
 
 interface Article {
   id: string
@@ -73,6 +74,7 @@ class UnreadArticlesExporter {
   private outputDir: string
   private options: ExportOptions
   private readStatusPath: string
+  private feedCategoryMap: Map<string, string> = new Map()
 
   constructor(options: ExportOptions) {
     this.options = options
@@ -127,7 +129,7 @@ class UnreadArticlesExporter {
     }
   }
 
-  private async fetchSubscriptions(): Promise<{ inboxIds: string[], feedViewMap: Map<string, number> }> {
+  private async fetchSubscriptions(): Promise<{ inboxIds: string[], feedViewMap: Map<string, number>, feedCategoryMap: Map<string, string> }> {
     console.log("📋 Fetching subscriptions...")
 
     const decodedToken = decodeURIComponent(this.options.token)
@@ -136,6 +138,7 @@ class UnreadArticlesExporter {
       : "better-auth.session_token"
 
     const feedViewMap = new Map<string, number>()
+    const feedCategoryMap = new Map<string, string>()
 
     // Get feed subscriptions
     const response = await fetch(`${this.options.apiUrl}/subscriptions`, {
@@ -159,6 +162,7 @@ class UnreadArticlesExporter {
       for (const sub of result.data) {
         if (sub.feedId) {
           feedViewMap.set(sub.feedId, sub.view)
+          feedCategoryMap.set(sub.feedId, sub.category || 'OTHERS')
         }
       }
     }
@@ -188,7 +192,7 @@ class UnreadArticlesExporter {
     }
 
     console.log(`✓ Found ${inboxIds.length} inboxes, ${feedViewMap.size} feed subscriptions`)
-    return { inboxIds, feedViewMap }
+    return { inboxIds, feedViewMap, feedCategoryMap }
   }
 
   private async fetchFeedArticles(feedViewMap: Map<string, number>): Promise<Article[]> {
@@ -253,6 +257,7 @@ class UnreadArticlesExporter {
             const article = item.entries
             // Get feedId from the feeds object
             const feedId = item.feeds?.id
+            article.feedId = feedId || null
             // Look up the subscription view for this feed
             const subView = feedId ? feedViewMap.get(feedId) : undefined
             
@@ -396,7 +401,10 @@ class UnreadArticlesExporter {
     console.log("📡 Fetching all unread articles...\n")
 
     // 1. Get subscriptions to find inboxIds and build feedViewMap
-    const { inboxIds, feedViewMap } = await this.fetchSubscriptions()
+    const { inboxIds, feedViewMap, feedCategoryMap } = await this.fetchSubscriptions()
+
+    // Store for later use (writing subscription_category to pipeline-state)
+    this.feedCategoryMap = feedCategoryMap
 
     // 2. Fetch feed articles (view=0 for all, then categorize by subscription view)
     const feedArticles = await this.fetchFeedArticles(feedViewMap)
@@ -1140,6 +1148,16 @@ ${entryIdMarker}
 
     if (newArticles.length === 0) {
       console.log("✓ All articles already exist, nothing to download.")
+
+      // Batch-write subscription_category to pipeline-state for all articles
+      for (const article of articles) {
+        if (article.feedId && this.feedCategoryMap.has(article.feedId)) {
+          try {
+            await updateArticleState(article.id, { subscription_category: this.feedCategoryMap.get(article.feedId)! })
+          } catch {}
+        }
+      }
+
       this.saveReadStatus(readStatus)
       return
     }
@@ -1215,6 +1233,12 @@ ${entryIdMarker}
           const html = this.generateHtml(article, processedContent)
           await fs.promises.writeFile(path.join(articleFolder, "index.html"), html, "utf-8")
 
+          // Write subscription category to pipeline-state
+          if (article.feedId && this.feedCategoryMap.has(article.feedId)) {
+            const subCat = this.feedCategoryMap.get(article.feedId)!
+            await updateArticleState(article.id, { subscription_category: subCat }).catch(() => {})
+          }
+
           // Update progress
           completed++
           progressBar.update(completed, {
@@ -1248,6 +1272,16 @@ ${entryIdMarker}
     this.saveReadStatus(readStatus)
 
     const totalDeleted = locallyDeletedCount + remoteDeletedCount
+
+    // Batch-write subscription_category to pipeline-state for all articles
+    for (const article of articles) {
+      if (article.feedId && this.feedCategoryMap.has(article.feedId)) {
+        try {
+          await updateArticleState(article.id, { subscription_category: this.feedCategoryMap.get(article.feedId)! })
+        } catch {}
+      }
+    }
+
     console.log(`\n✅ Export completed successfully in ${elapsed}s!`)
     console.log(`   New articles exported: ${successCount}/${newArticles.length}`)
     console.log(`   Skipped (already exist): ${skippedCount}`)

@@ -7,6 +7,7 @@ export interface ArticleState {
   status: PipelineStatus;
   language?: string;
   category?: string;
+  subscription_category?: string;
   should_reject?: boolean;
   reject_reason?: string | null;
   summary?: string;

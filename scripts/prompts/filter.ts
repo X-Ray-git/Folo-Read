@@ -22,9 +22,10 @@ export function getFilterSystemPrompt(): string {
   return loadPromptConfig().filter.system;
 }
 
-export const buildUserPrompt = (title: string, content: string, url: string) => {
+export const buildUserPrompt = (title: string, content: string, url: string, subscriptionCategory?: string) => {
+  const catLine = subscriptionCategory ? `【订阅分类】：${subscriptionCategory}\n` : '';
   return `请针对以下文章的内容特征，返回要求的 JSON 判定结果：
-【文章标题】：${title}
+${catLine}【文章标题】：${title}
 【文章链接】：${url}
 【内容截取】：
 ${content}
