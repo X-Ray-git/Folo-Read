@@ -259,12 +259,20 @@ async function main() {
     // Auto-select the first article as default, but allow user to select 0, 1, or multiple
     const initialValues = [group[0].id];
 
-    const selected = await multiselect({
-      message: '请选择要保留的文章 (按空格多选，未选中的将被直接标记为已读并丢弃)：',
-      options,
-      initialValues,
-      required: false,
-    });
+    // Non-interactive fallback: skip dedup decisions, let user review later
+    let selected: string[] | symbol;
+    if (!process.stdout.isTTY) {
+      console.log(picocolors.yellow('  ⚠️  非交互环境，跳过自动去重决策。重复组将保留供用户审核。'));
+      // Keep all articles, don't auto-reject any
+      selected = group.map(a => a.id);
+    } else {
+      selected = await multiselect({
+        message: '请选择要保留的文章 (按空格多选，未选中的将被直接标记为已读并丢弃)：',
+        options,
+        initialValues,
+        required: false,
+      });
+    }
     
     if (isCancel(selected)) {
       outro(picocolors.gray('👋 已取消去重操作'));
@@ -304,8 +312,12 @@ async function main() {
       const updatedState = await loadState(); // reload to get the latest state
       await deleteArticleFolders(rejectedIds);
       await markLocallyRead(rejectedIds);
-      await markAsReadInFolo(rejectedIds, updatedState);
-      console.log(picocolors.gray(`   清理完毕，并在 Folo 中标记已读。`));
+      if (process.stdout.isTTY) {
+        await markAsReadInFolo(rejectedIds, updatedState);
+        console.log(picocolors.gray(`   清理完毕，并在 Folo 中标记已读。`));
+      } else {
+        console.log(picocolors.gray(`   本地标记完成（非交互模式：等待用户确认后再标 Folo 已读）`));
+      }
     }
   }
   
