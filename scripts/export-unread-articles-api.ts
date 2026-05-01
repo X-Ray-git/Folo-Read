@@ -68,6 +68,8 @@ interface ExportOptions {
   apiUrl: string
   limit?: number
   concurrency?: number
+  clientId?: string
+  sessionId?: string
 }
 
 class UnreadArticlesExporter {
@@ -136,6 +138,7 @@ class UnreadArticlesExporter {
     const cookieName = this.options.apiUrl.includes("https")
       ? "__Secure-better-auth.session_token"
       : "better-auth.session_token"
+    const cookieStr = `${cookieName}=${decodedToken}; better-auth.last_used_login_method=google`
 
     const feedViewMap = new Map<string, number>()
     const feedCategoryMap = new Map<string, string>()
@@ -145,9 +148,16 @@ class UnreadArticlesExporter {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Cookie: `${cookieName}=${decodedToken}`,
+        Cookie: cookieStr,
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
         Accept: "application/json",
+        Origin: "https://app.folo.is",
+        Referer: "https://app.folo.is",
+        "X-App-Platform": "desktop/web",
+        "X-App-Name": "Folo Web",
+        "X-App-Version": "1.7.0",
+        "X-Client-Id": this.options.clientId || "",
+        "X-Session-Id": this.options.sessionId || "",
       },
     })
 
@@ -174,9 +184,16 @@ class UnreadArticlesExporter {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Cookie: `${cookieName}=${decodedToken}`,
+          Cookie: cookieStr,
           "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
           Accept: "application/json",
+          Origin: "https://app.folo.is",
+          Referer: "https://app.folo.is",
+          "X-App-Platform": "desktop/web",
+          "X-App-Name": "Folo Web",
+          "X-App-Version": "1.7.0",
+          "X-Client-Id": this.options.clientId || "",
+          "X-Session-Id": this.options.sessionId || "",
         },
       })
       if (inboxRes.ok) {
@@ -207,6 +224,7 @@ class UnreadArticlesExporter {
     const cookieName = this.options.apiUrl.includes("https")
       ? "__Secure-better-auth.session_token"
       : "better-auth.session_token"
+    const cookieStr = `${cookieName}=${decodedToken}; better-auth.last_used_login_method=google`
 
     try {
       // Fetch entries from both view=0 (综合) and view=1 (文章/社交媒体)
@@ -234,9 +252,16 @@ class UnreadArticlesExporter {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Cookie: `${cookieName}=${decodedToken}`,
+              Cookie: cookieStr,
               "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
               Accept: "application/json",
+              Origin: "https://app.folo.is",
+              Referer: "https://app.folo.is",
+              "X-App-Platform": "desktop/web",
+              "X-App-Name": "Folo Web",
+              "X-App-Version": "1.7.0",
+              "X-Client-Id": this.options.clientId || "",
+              "X-Session-Id": this.options.sessionId || "",
             },
             body: JSON.stringify(body),
           })
@@ -302,6 +327,7 @@ class UnreadArticlesExporter {
     const cookieName = this.options.apiUrl.includes("https")
       ? "__Secure-better-auth.session_token"
       : "better-auth.session_token"
+    const cookieStr = `${cookieName}=${decodedToken}; better-auth.last_used_login_method=google`
 
     // Step 1: Get all unread entry IDs from inboxes
     for (let i = 0; i < inboxIds.length; i++) {
@@ -327,9 +353,16 @@ class UnreadArticlesExporter {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Cookie: `${cookieName}=${decodedToken}`,
+              Cookie: cookieStr,
               "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
               Accept: "application/json",
+              Origin: "https://app.folo.is",
+              Referer: "https://app.folo.is",
+              "X-App-Platform": "desktop/web",
+              "X-App-Name": "Folo Web",
+              "X-App-Version": "1.7.0",
+              "X-Client-Id": this.options.clientId || "",
+              "X-Session-Id": this.options.sessionId || "",
             },
             body: JSON.stringify(body),
           })
@@ -372,9 +405,16 @@ class UnreadArticlesExporter {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            Cookie: `${cookieName}=${decodedToken}`,
+            Cookie: cookieStr,
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
             Accept: "application/json",
+            Origin: "https://app.folo.is",
+            Referer: "https://app.folo.is",
+            "X-App-Platform": "desktop/web",
+            "X-App-Name": "Folo Web",
+            "X-App-Version": "1.7.0",
+            "X-Client-Id": this.options.clientId || "",
+            "X-Session-Id": this.options.sessionId || "",
           },
         })
 
@@ -1334,6 +1374,12 @@ function loadConfig(): Partial<ExportOptions> {
             case "FOLO_CONCURRENCY":
               config.concurrency = parseInt(value, 10)
               break
+            case "FOLO_CLIENT_ID":
+              config.clientId = value
+              break
+            case "FOLO_SESSION_ID":
+              config.sessionId = value
+              break
           }
         }
       }
@@ -1411,6 +1457,8 @@ Authentication:
       concurrencyIndex !== -1
         ? parseInt(args[concurrencyIndex + 1], 10)
         : fileConfig.concurrency || parseInt(process.env.FOLO_CONCURRENCY || "5", 10),
+    clientId: fileConfig.clientId || process.env.FOLO_CLIENT_ID || "",
+    sessionId: fileConfig.sessionId || process.env.FOLO_SESSION_ID || "",
   }
 
   if (!options.token) {
